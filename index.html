@@ -40,8 +40,8 @@
 
         /* Puzzle Container */
         #puzzle-container {
-            width: 310px; /* 3 * 100 + 2 * 5 */
-            height: 310px;
+            width: 415px; /* 4 * 100 + 3 * 5 */
+            height: 415px;
             position: relative;
             background: var(--bg-color);
             padding: 5px;
@@ -55,7 +55,7 @@
             height: var(--tile-size);
             position: absolute;
             background-image: url(images/image.png); /* background-image: url('https://picsum.photos/300/300'); for random images */
-            background-size: 300px 300px; /* Matches container size approx */
+            background-size: 400px 400px; /* Matches container size approx */
             cursor: pointer;
             transition: top 0.2s, left 0.2s;
             border-radius: 4px;
@@ -125,8 +125,8 @@
 
     <script>
         // --- CONFIGURATION ---
-        const ROWS = 3;
-        const COLS = 3;
+        const ROWS = 4;
+        const COLS = 4;
         const TILE_SIZE = 100; 
         const GAP = 5; 
 
@@ -145,7 +145,7 @@
 
         // --- STATE ---
         let tiles = []; 
-        let emptyTileIndex = { r: 2, c: 2 }; 
+        let selectedTile = null;
         let timeElapsed = 0;
         let moveCount = 0;
         let timerInterval;
@@ -178,11 +178,6 @@
             for (let r = 0; r < ROWS; r++) {
                 tiles[r] = [];
                 for (let c = 0; c < COLS; c++) {
-                    if (r === ROWS - 1 && c === COLS - 1) {
-                        tiles[r][c] = null;
-                        continue;
-                    }
-
                     let tile = document.createElement('div');
                     tile.className = 'tile';
                     setPosition(tile, r, c);
@@ -194,14 +189,14 @@
                     tile.dataset.correctR = r;
                     tile.dataset.correctC = c;
                     
-                    tile.onclick = () => handleTileClick(r, c);
+                    tile.dataset.row = r;
+                    tile.dataset.col = c;
+                    tile.onclick = handleTileClick;
 
                     container.appendChild(tile);
                     tiles[r][c] = tile;
                 }
             }
-            tiles[ROWS-1][COLS-1] = null;
-            emptyTileIndex = { r: ROWS-1, c: COLS-1 };
         }
 
         function setPosition(element, r, c) {
@@ -215,14 +210,16 @@
             // Reset the seed so the shuffle is the same every time the page loads
             currentSeed = GAME_SEED;
 
-            for (let i = 0; i < 150; i++) {
-                const neighbors = getNeighbors(emptyTileIndex.r, emptyTileIndex.c);
+            for (let i = 0; i < 200; i++) {
+                // Pick two random tiles to swap
+                const r1 = Math.floor(seededRandom() * ROWS);
+                const c1 = Math.floor(seededRandom() * COLS);
+                const r2 = Math.floor(seededRandom() * ROWS);
+                const c2 = Math.floor(seededRandom() * COLS);
                 
-                // USE seededRandom() INSTEAD OF Math.random()
-                const randomIndex = Math.floor(seededRandom() * neighbors.length);
-                const randomNeighbor = neighbors[randomIndex];
-                
-                swapTiles(randomNeighbor.r, randomNeighbor.c);
+                if (r1 !== r2 || c1 !== c2) {
+                    swapTiles(r1, c1, r2, c2);
+                }
             }
             
             moveCount = 0; 
@@ -230,48 +227,42 @@
             isGameActive = true;
         }
 
-        function getNeighbors(r, c) {
-            const neighbors = [];
-            if (r > 0) neighbors.push({ r: r - 1, c: c });
-            if (r < ROWS - 1) neighbors.push({ r: r + 1, c: c });
-            if (c > 0) neighbors.push({ r: r, c: c - 1 });
-            if (c < COLS - 1) neighbors.push({ r: r, c: c + 1 });
-            return neighbors;
-        }
-
-        function handleTileClick(clickedR, clickedC) {
+        function handleTileClick(e) {
             if (!isGameActive) return;
-
-            let currR, currC;
-            for(let r=0; r<ROWS; r++){
-                for(let c=0; c<COLS; c++){
-                    if(tiles[r][c] && tiles[r][c].dataset.correctR == clickedR && tiles[r][c].dataset.correctC == clickedC) {
-                        currR = r;
-                        currC = c;
-                    }
-                }
-            }
-            
-            if (isAdjacent(currR, currC, emptyTileIndex.r, emptyTileIndex.c)) {
-                swapTiles(currR, currC);
+            const tile = e.currentTarget;
+            const r = parseInt(tile.dataset.row);
+            const c = parseInt(tile.dataset.col);
+            if (selectedTile === null) {
+                selectedTile = { r, c };
+                tile.style.border = '2px solid #e74c3c';
+            } else if (selectedTile.r === r && selectedTile.c === c) {
+                tiles[selectedTile.r][selectedTile.c].style.border = '2px solid rgba(255,255,255,0.2)';
+                selectedTile = null;
+            } else {
+                swapTiles(selectedTile.r, selectedTile.c, r, c);
                 moveCount++;
                 document.getElementById('moves').innerText = moveCount;
+                tiles[selectedTile.r][selectedTile.c].style.border = '2px solid rgba(255,255,255,0.2)';
+                selectedTile = null;
                 checkWin();
             }
         }
 
-        function isAdjacent(r1, c1, r2, c2) {
-            return (Math.abs(r1 - r2) + Math.abs(c1 - c2)) === 1;
-        }
-
-        function swapTiles(r, c) {
-            const tile = tiles[r][c];
-            const emptyR = emptyTileIndex.r;
-            const emptyC = emptyTileIndex.c;
-            setPosition(tile, emptyR, emptyC);
-            tiles[emptyR][emptyC] = tile;
-            tiles[r][c] = null;
-            emptyTileIndex = { r: r, c: c };
+        function swapTiles(r1, c1, r2, c2) {
+            const tile1 = tiles[r1][c1];
+            const tile2 = tiles[r2][c2];
+            
+            // Swap positions
+            setPosition(tile1, r2, c2);
+            setPosition(tile2, r1, c1);
+            // Update dataset
+            tile1.dataset.row = r2;
+            tile1.dataset.col = c2;
+            tile2.dataset.row = r1;
+            tile2.dataset.col = c1;
+            // Swap in array
+            tiles[r1][c1] = tile2;
+            tiles[r2][c2] = tile1;
         }
 
         function checkWin() {
@@ -300,7 +291,7 @@
         function gameWin() {
             isGameActive = false;
             clearInterval(timerInterval);
-            let score = 10000 - (timeElapsed * 10) - (moveCount * 5);
+            let score = 20000 - (timeElapsed * 5) - (moveCount * 2);
             if (score < 0) score = 0;
 
             document.getElementById('game-ui').classList.add('hidden');

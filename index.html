@@ -3,408 +3,452 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Scoring Quiz</title>
+    <title>MINDSCAPE</title>
     <style>
         :root {
-            --primary: #6c5ce7;
-            --success: #00b894;
-            --error: #d63031;
-            --bg: #dfe6e9;
-            --card-bg: #ffffff;
-            --text: #2d3436;
+            --neon-green: #0f0;
+            --neon-blue: #00f3ff;
+            --neon-red: #ff3333;
+            --dark-bg: #0d0d0d;
+            --panel-bg: #1a1a1a;
+            --selected: #ff00ff;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
             margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        #game-ui {
-            width: 100%;
-            max-width: 600px;
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-
-        .hud {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            font-weight: bold;
-            color: #636e72;
-            font-size: 1.1rem;
-        }
-
-        /* Animated Score Update */
-        .score-change {
-            font-size: 0.9rem;
-            margin-left: 5px;
-            opacity: 0;
-            transition: opacity 0.5s, transform 0.5s;
-        }
-        .score-up { color: var(--success); }
-        .score-none { color: var(--error); }
-
-        .timer-bar {
-            height: 6px;
-            background: #eee;
-            border-radius: 3px;
-            margin-bottom: 25px;
             overflow: hidden;
-            display: none; 
-        }
-        .timer-fill {
-            height: 100%;
-            background: var(--primary);
-            width: 100%;
-            transition: width 1s linear;
+            text-align: center;
+            user-select: none;
         }
 
-        h2 { margin-bottom: 25px; font-size: 1.5rem; line-height: 1.4; }
-
-        .options-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+        /* --- HUD --- */
+        #hud {
+            position: fixed; top: 0; width: 100%; padding: 15px;
+            background: #000; border-bottom: 1px solid var(--neon-green);
+            display: flex; justify-content: space-between;
+            font-size: 1.2rem; font-weight: bold; z-index: 100;
         }
 
-        button.option-btn {
-            background: #f1f2f6;
-            border: 2px solid transparent;
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            color: var(--text);
-            font-weight: 600;
-        }
+        .container { width: 95%; max-width: 900px; margin-top: 80px; display: flex; flex-direction: column; align-items: center; }
 
-        button.option-btn:hover:not(:disabled) {
-            background: #e1e2e6;
-            transform: translateY(-2px);
-        }
-
-        button.correct {
-            background-color: var(--success) !important;
-            color: white !important;
-            border-color: var(--success) !important;
-        }
-
-        button.wrong {
-            background-color: var(--error) !important;
-            color: white !important;
-            border-color: var(--error) !important;
-            opacity: 0.7;
-        }
-
-        button:disabled {
-            cursor: default;
-            transform: none !important;
-        }
-
-        #game-over { text-align: center; display: none; }
+        /* --- PHASES --- */
         .hidden { display: none !important; }
+
+        /* Memorize Items */
+        #sequence-display { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-top: 50px; }
+        .mem-item {
+            background: var(--panel-bg); border: 2px solid var(--neon-green);
+            padding: 20px; font-size: 1.5rem; border-radius: 5px;
+            box-shadow: 0 0 10px var(--neon-green); animation: fadeIn 0.5s;
+        }
+
+        /* Distraction */
+        #distract-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: black; z-index: 50;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .glitch-text {
+            font-size: 4rem; font-weight: bold; color: white;
+            animation: glitch 0.2s infinite; text-shadow: 2px 2px red, -2px -2px blue;
+        }
+
+        /* Recall */
+        #slots-container { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; width: 100%; }
+        .slot {
+            width: 90px; height: 50px; border: 2px dashed #555;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 0.8rem; color: white; background: rgba(255,255,255,0.05);
+            position: relative; cursor: pointer;
+        }
+        .slot.active { border: 2px solid var(--selected); box-shadow: 0 0 10px var(--selected); }
+        .slot.filled { border: 2px solid var(--neon-blue); color: var(--neon-blue); }
+        .slot-number { position: absolute; top: -18px; left: 0; font-size: 0.7rem; color: #777; }
+
+        #word-bank { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 800px; padding-top: 20px; border-top: 1px solid #333; }
+        .bank-btn {
+            background: #222; color: #aaa; border: 1px solid #444; padding: 8px 15px;
+            cursor: pointer; font-family: inherit; font-size: 0.9rem;
+        }
+        .bank-btn:hover:not(:disabled) { background: #444; color: white; }
+        .bank-btn:disabled { opacity: 0.2; text-decoration: line-through; cursor: default; }
+
+        #btn-submit {
+            margin-top: 20px; padding: 15px 40px; font-size: 1.2rem;
+            background: var(--neon-green); color: black; border: none; cursor: pointer; font-weight: bold;
+        }
+
+        /* --- RESULTS TABLE --- */
+        #game-over { width: 100%; max-width: 800px; }
+        .results-table {
+            width: 100%; border-collapse: collapse; margin-top: 20px;
+            font-size: 0.9rem; text-align: left;
+        }
+        .results-table th { border-bottom: 1px solid var(--neon-green); padding: 10px; color: var(--neon-green); }
+        .results-table td { border-bottom: 1px solid #333; padding: 8px; color: #ccc; }
+        
+        .res-correct { color: var(--neon-green) !important; }
+        .res-wrong { color: var(--neon-red) !important; text-decoration: line-through; }
+        .res-missed { color: var(--neon-blue) !important; font-weight: bold; }
+        
+        /* Start Overlay */
+        #start-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 200;
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+
+        @keyframes glitch {
+            0% { transform: translate(0); } 20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); } 60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); } 100% { transform: translate(0); }
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <div id="game-ui">
-        <div class="hud">
-            <span>Question <span id="current-q">1</span>/<span id="total-q">10</span></span>
-            <span>
-                Score: <span id="current-score">0</span>
-                <span id="score-anim" class="score-change">+0</span>
-            </span>
-        </div>
-
-        <div id="timer-bar-container" class="timer-bar">
-            <div id="timer-fill" class="timer-fill"></div>
-        </div>
-
-        <h2 id="question-text">Loading...</h2>
-
-        <div id="options-container" class="options-grid"></div>
-        
-        <p id="feedback-text" style="height: 20px; color: #888; font-size: 0.9rem; margin-top:15px;"></p>
+    <div id="start-overlay">
+        <h1 style="color:white; margin-bottom:10px;">MINDSCAPE</h1>
+        <p style="color:#777; margin-bottom: 30px;">Turn volume UP. Click to Initialize.</p>
+        <button onclick="startGame()" style="padding:15px 30px; font-size:1.5rem; cursor:pointer; background:var(--neon-green); border:none; font-weight:bold;">INITIALIZE SYSTEM</button>
     </div>
 
-    <div id="game-over" class="hidden">
-        <h1>Quiz Complete!</h1>
-        <p>Correct Answers: <span id="final-correct">0</span></p>
-        <h2 style="color: var(--primary); font-size: 3rem; margin: 20px 0;">
-            <span id="final-score">0</span>
-        </h2>
-        <p>Sending to Hub...</p>
+    <div id="hud">
+        <span id="phase-label">IDLE</span>
+        <span>⏱️ <span id="timer-display">00.0</span>s</span>
+    </div>
+
+    <div class="container">
+        <div id="sequence-display" class="hidden"></div>
+
+        <div id="distract-layer" class="hidden">
+            <div class="glitch-text">SYSTEM FAILURE</div>
+        </div>
+
+        <div id="recall-ui" class="hidden">
+            <div id="slots-container"></div>
+            <div id="word-bank"></div>
+            <button id="btn-submit" onclick="submitData()">VERIFY INTEGRITY</button>
+        </div>
+
+        <div id="game-over" class="hidden">
+            <h1>SYSTEM REPORT</h1>
+            <h2 style="margin: 5px 0;">SCORE: <span id="final-score" style="color:white; font-size:2rem;">0</span></h2>
+            
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>User Input</th>
+                        <th>Actual Data</th>
+                        <th>Time (s)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                    </tbody>
+            </table>
+            <p style="color:#555; margin-top:20px;">Data transmitted to Hub.</p>
+        </div>
     </div>
 
     <script>
-        // --- 1. DATA & CONFIG ---
-        const QUESTION_BANK = [
-            { "q": "What does CPU stand for?", "options": ["Central Process Unit", "Central Processing Unit", "Computer Personal Unit", "Central Program Unit"], "ans": 1 },
-            { "q": "Which language is primarily used for web page structure?", "options": ["CSS", "JavaScript", "HTML", "Python"], "ans": 2 },
-            { "q": "Which data structure uses FIFO?", "options": ["Stack", "Queue", "Tree", "Graph"], "ans": 1 },
-            { "q": "Binary number system base?", "options": ["2", "8", "10", "16"], "ans": 0 },
-            { "q": "Which is not an operating system?", "options": ["Linux", "Windows", "Oracle", "macOS"], "ans": 2 },
-            { "q": "RAM is?", "options": ["Permanent memory", "Secondary memory", "Volatile memory", "External memory"], "ans": 2 },
-            { "q": "Which symbol is used for comments in C?", "options": ["//", "#", "<!-- -->", "**"], "ans": 0 },
-            { "q": "Which protocol is used for web browsing?", "options": ["FTP", "SMTP", "HTTP", "SNMP"], "ans": 2 },
-            { "q": "Which is a relational database?", "options": ["MongoDB", "MySQL", "Redis", "Cassandra"], "ans": 1 },
-            { "q": "Time complexity of binary search?", "options": ["O(n)", "O(log n)", "O(n²)", "O(1)"], "ans": 1 },
-
-            { "q": "Which device is an input device?", "options": ["Monitor", "Printer", "Keyboard", "Speaker"], "ans": 2 },
-            { "q": "Hexadecimal base?", "options": ["2", "8", "10", "16"], "ans": 3 },
-            { "q": "Which language is used for styling web pages?", "options": ["HTML", "CSS", "PHP", "SQL"], "ans": 1 },
-            { "q": "Which is not a programming paradigm?", "options": ["Procedural", "Object-oriented", "Functional", "Incremental"], "ans": 3 },
-            { "q": "Which company developed Java?", "options": ["Microsoft", "Sun Microsystems", "IBM", "Oracle"], "ans": 1 },
-            { "q": "Which is the brain of the computer?", "options": ["RAM", "Hard Disk", "CPU", "Motherboard"], "ans": 2 },
-            { "q": "Default port of HTTP?", "options": ["21", "25", "80", "443"], "ans": 2 },
-            { "q": "Which sorting algorithm is fastest on average?", "options": ["Bubble Sort", "Selection Sort", "Quick Sort", "Insertion Sort"], "ans": 2 },
-            { "q": "Which is not a valid Python data type?", "options": ["list", "tuple", "array", "set"], "ans": 2 },
-            { "q": "SQL is used for?", "options": ["Styling", "Logic building", "Database querying", "Networking"], "ans": 2 },
-
-            { "q": "Which memory is fastest?", "options": ["RAM", "Cache", "Hard Disk", "ROM"], "ans": 1 },
-            { "q": "Which is an example of an OS?", "options": ["Chrome", "Linux", "MySQL", "Python"], "ans": 1 },
-            { "q": "Which operator is used for assignment in C?", "options": ["==", "=", "!=", "<="], "ans": 1 },
-            { "q": "Which layer does TCP belong to?", "options": ["Application", "Transport", "Network", "Data Link"], "ans": 1 },
-            { "q": "Which is a NoSQL database?", "options": ["PostgreSQL", "Oracle", "MongoDB", "MySQL"], "ans": 2 },
-            { "q": "Which loop executes at least once?", "options": ["for", "while", "do-while", "foreach"], "ans": 2 },
-            { "q": "What does URL stand for?", "options": ["Uniform Resource Locator", "Universal Reference Link", "Unified Resource Line", "Uniform Reference Locator"], "ans": 0 },
-            { "q": "Which is not a file system?", "options": ["NTFS", "FAT32", "EXT4", "TCP"], "ans": 3 },
-            { "q": "Which key uniquely identifies a record?", "options": ["Foreign key", "Candidate key", "Primary key", "Composite key"], "ans": 2 },
-            { "q": "Which language is interpreted?", "options": ["C", "C++", "Java", "Python"], "ans": 3 },
-
-            { "q": "What does IDE stand for?", "options": ["Integrated Development Environment", "Internal Design Engine", "Integrated Data Editor", "Internal Development Editor"], "ans": 0 },
-            { "q": "Which algorithm technique uses divide and conquer?", "options": ["Bubble Sort", "Merge Sort", "Linear Search", "Insertion Sort"], "ans": 1 },
-            { "q": "Which is not a network topology?", "options": ["Star", "Bus", "Ring", "Treehouse"], "ans": 3 },
-            { "q": "Which symbol is used for logical AND?", "options": ["&", "&&", "|", "||"], "ans": 1 },
-            { "q": "Which OS is open-source?", "options": ["Windows", "macOS", "Linux", "DOS"], "ans": 2 },
-            { "q": "Which component stores BIOS?", "options": ["RAM", "ROM", "Cache", "Hard Disk"], "ans": 1 },
-            { "q": "Which protocol is used to send email?", "options": ["HTTP", "FTP", "SMTP", "POP3"], "ans": 2 },
-            { "q": "Which normal form removes transitive dependency?", "options": ["1NF", "2NF", "3NF", "BCNF"], "ans": 2 },
-            { "q": "Which is a front-end framework?", "options": ["Django", "Laravel", "React", "Flask"], "ans": 2 },
-            { "q": "Which command is used to list files in Linux?", "options": ["ls", "dir", "list", "show"], "ans": 0 },
-
-            { "q": "Which device converts digital to analog?", "options": ["ADC", "DAC", "Modem", "Router"], "ans": 1 },
-            { "q": "What is the size of int in C (typically)?", "options": ["2 bytes", "4 bytes", "8 bytes", "Depends on compiler"], "ans": 3 },
-            { "q": "Which is not a DBMS?", "options": ["SQLite", "MongoDB", "Excel", "PostgreSQL"], "ans": 2 },
-            { "q": "Which data structure uses LIFO?", "options": ["Queue", "Stack", "Array", "Linked List"], "ans": 1 },
-            { "q": "Which language runs in the browser?", "options": ["C", "Java", "Python", "JavaScript"], "ans": 3 },
-            { "q": "Which is not an IP address?", "options": ["192.168.1.1", "127.0.0.1", "255.255.255.0", "999.10.1.1"], "ans": 3 },
-            { "q": "Which type of attack floods a network?", "options": ["Phishing", "DDoS", "Spoofing", "Sniffing"], "ans": 1 },
-            { "q": "Which symbol denotes pointer in C?", "options": ["&", "*", "#", "@"], "ans": 1 },
-            { "q": "Which cloud model provides infrastructure?", "options": ["SaaS", "PaaS", "IaaS", "FaaS"], "ans": 2 },
-            { "q": "Which OS scheduling is preemptive?", "options": ["FCFS", "SJF", "Round Robin", "Priority (non-preemptive)"], "ans": 2 },
-
-            { "q": "Which is an example of system software?", "options": ["MS Word", "Photoshop", "Linux", "Chrome"], "ans": 2 },
-            { "q": "Which layer handles encryption?", "options": ["Application", "Presentation", "Session", "Transport"], "ans": 1 },
-            { "q": "Which data type stores true/false?", "options": ["int", "char", "bool", "float"], "ans": 2 },
-            { "q": "Which command creates a directory in Linux?", "options": ["touch", "mkdir", "rmdir", "cd"], "ans": 1 },
-            { "q": "Which sorting has worst O(n²)?", "options": ["Merge Sort", "Heap Sort", "Bubble Sort", "Quick Sort"], "ans": 2 },
-            { "q": "Which is a version control system?", "options": ["Docker", "Git", "Jenkins", "Kubernetes"], "ans": 1 },
-            { "q": "Which protocol resolves IP to MAC?", "options": ["DNS", "ARP", "RARP", "ICMP"], "ans": 1 },
-            { "q": "Which is not a Java keyword?", "options": ["static", "void", "include", "class"], "ans": 2 },
-            { "q": "Which is a markup language?", "options": ["HTML", "Python", "C", "Java"], "ans": 0 },
-            { "q": "Which storage is secondary storage?", "options": ["Cache", "RAM", "Register", "Hard Disk"], "ans": 3 }
+        // --- CONFIG ---
+        const DATA_POOL = [
+            "CPU", "RAM", "BIOS", "JAVA", "HTML", "CSS", "NODE", "DATA", "WIFI", "CACHE", "LOGIN", "USER",
+            "1990", "2000", "2024", "2077", "1080p", "4K", "MP3", "PNG", "GIF", "JPEG", "TIFF", "RAW",
+            "💾", "🖱️", "💿", "🔋", "🤖", "👾", "📱", "📡", "🔑", "🔒", "💊", "💣", "⚡", "⚠️", "👁️",
+            "LINUX", "WIN", "MAC", "CODE", "BUG", "LOOP", "IF", "ELSE", "VAR", "CONST", "NULL", "VOID"
         ];
 
         const urlParams = new URLSearchParams(window.location.search);
-        let currentSeed = parseInt(urlParams.get('seed')) || 12345;
-        const requestedCount = parseInt(urlParams.get('count')) || 5;
-        const TOTAL_QUESTIONS = Math.min(requestedCount, QUESTION_BANK.length);
-        const SECONDS_PER_QUESTION = parseInt(urlParams.get('timer')) || 0; 
+        const SEED = parseInt(urlParams.get('seed')) || 12345;
+        const COUNT = parseInt(urlParams.get('count')) || 5; 
+        
+        // Timers
+        const TIME_MEM = Math.max(1, parseInt(urlParams.get('memTime')) || 5);
+        const TIME_DIST = Math.max(1, parseInt(urlParams.get('distTime')) || 4);
+        const TIME_ANS = Math.max(5, parseInt(urlParams.get('ansTime')) || 45);
 
-        // --- 2. STATE ---
-        let questions = [];
-        let currentQIndex = 0;
-        let currentScore = 0; // Live Score
-        let correctAnswers = 0;
-        let questionTimerInterval;
-        let questionTimeLeft;
-        let questionStartTime; // To track time per question
+        // --- STATE ---
+        let currentSeed = SEED;
+        let targetSequence = [];
+        let bankWords = [];
+        let userAnswers = []; 
+        let selectedSlotIndex = null;
+        let recallStartTime = 0;
+        let timerInterval;
+        
+        // Audio
+        let audioCtx;
+        let isAudioInit = false;
 
-        // --- 3. HELPERS ---
+        // --- RANDOM ---
         function seededRandom() {
             var x = Math.sin(currentSeed++) * 10000;
             return x - Math.floor(x);
         }
 
-        function getSeededQuestions() {
-            let shuffled = [...QUESTION_BANK];
-            for (let i = shuffled.length - 1; i > 0; i--) {
+        function shuffleSeeded(array) {
+            for(let i = array.length - 1; i > 0; i--){
                 const j = Math.floor(seededRandom() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                [array[i], array[j]] = [array[j], array[i]];
             }
-            return shuffled.slice(0, TOTAL_QUESTIONS);
+            return array;
         }
 
-        // --- 4. GAME LOOP ---
-        function initGame() {
-            questions = getSeededQuestions();
-            document.getElementById('total-q').innerText = TOTAL_QUESTIONS;
-            if (SECONDS_PER_QUESTION > 0) {
-                document.getElementById('timer-bar-container').style.display = 'block';
+        // --- START ---
+        function startGame() {
+            // 1. Initialize Audio Context on User Click (Crucial for sound to work)
+            if (!isAudioInit) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    // Resume immediately in case it started suspended
+                    if (audioCtx.state === 'suspended') {
+                        audioCtx.resume();
+                    }
+                    isAudioInit = true;
+                } catch (e) {
+                    console.warn("Audio not supported");
+                }
             }
-            loadQuestion();
-        }
 
-        function loadQuestion() {
-            if (currentQIndex >= questions.length) {
-                endGame();
-                return;
-            }
-
-            const qData = questions[currentQIndex];
+            document.getElementById('start-overlay').classList.add('hidden');
             
-            // UI Reset
-            document.getElementById('current-q').innerText = currentQIndex + 1;
-            document.getElementById('question-text').innerText = qData.q;
-            document.getElementById('feedback-text').innerText = "";
-            document.getElementById('score-anim').style.opacity = '0'; // Hide previous anim
+            // Generate Game Data
+            let pool = shuffleSeeded([...DATA_POOL]);
+            targetSequence = pool.slice(0, COUNT);
+            let decoys = pool.slice(COUNT, COUNT * 2);
+            bankWords = shuffleSeeded([...targetSequence, ...decoys]);
+            userAnswers = new Array(COUNT).fill(null);
 
-            const optionsDiv = document.getElementById('options-container');
-            optionsDiv.innerHTML = '';
+            startPhaseMemorize();
+        }
 
-            qData.options.forEach((opt, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'option-btn';
-                btn.innerText = opt;
-                btn.onclick = () => handleAnswer(index);
-                optionsDiv.appendChild(btn);
+        // --- PHASES ---
+        function startPhaseMemorize() {
+            setPhaseUI("MEMORIZE");
+            const container = document.getElementById('sequence-display');
+            container.classList.remove('hidden');
+            container.innerHTML = '';
+            
+            targetSequence.forEach(word => {
+                let div = document.createElement('div');
+                div.className = 'mem-item';
+                div.innerText = word;
+                container.appendChild(div);
             });
 
-            // Start Timer for this specific question
-            questionStartTime = Date.now();
-            if (SECONDS_PER_QUESTION > 0) {
-                startQuestionTimer();
-            }
+            runTimer(TIME_MEM, () => {
+                container.classList.add('hidden');
+                startPhaseDistract();
+            });
         }
 
-        function startQuestionTimer() {
-            clearInterval(questionTimerInterval);
-            questionTimeLeft = SECONDS_PER_QUESTION;
-            updateTimerBar();
-
-            questionTimerInterval = setInterval(() => {
-                questionTimeLeft--;
-                updateTimerBar();
-                if (questionTimeLeft <= 0) {
-                    clearInterval(questionTimerInterval);
-                    handleAnswer(-1); // Timeout
-                }
-            }, 1000);
-        }
-
-        function updateTimerBar() {
-            const percentage = (questionTimeLeft / SECONDS_PER_QUESTION) * 100;
-            document.getElementById('timer-fill').style.width = percentage + "%";
-        }
-
-        // --- 5. SCORING & ANSWER HANDLING ---
-        function handleAnswer(selectedIndex) {
-            clearInterval(questionTimerInterval);
+        function startPhaseDistract() {
+            setPhaseUI("ERROR // CORRUPTION");
+            document.getElementById('distract-layer').classList.remove('hidden');
             
-            const qData = questions[currentQIndex];
-            const buttons = document.querySelectorAll('.option-btn');
-            const isCorrect = selectedIndex === qData.ans;
-            const timeTakenSec = (Date.now() - questionStartTime) / 1000;
+            // PLAY SOUND
+            playGlitchSound();
 
-            // Disable buttons
-            buttons.forEach(btn => btn.disabled = true);
+            runTimer(TIME_DIST, () => {
+                document.getElementById('distract-layer').classList.add('hidden');
+                startPhaseRecall();
+            });
+        }
 
-            let pointsEarned = 0;
+        function startPhaseRecall() {
+            setPhaseUI("RESTORE DATA");
+            document.getElementById('recall-ui').classList.remove('hidden');
+            
+            renderSlots();
+            renderBank();
+            
+            recallStartTime = Date.now();
+            runTimer(TIME_ANS, submitData);
+        }
 
-            if (isCorrect) {
-                // Correct UI
-                if(selectedIndex !== -1) buttons[selectedIndex].classList.add('correct');
-                correctAnswers++;
-                
-                // === SCORING LOGIC ===
-                // Base points for getting it right
-                pointsEarned = 1000; 
+        // --- AUDIO ENGINE ---
+        function playGlitchSound() {
+            if(!audioCtx) return;
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            // Start low frequency
+            osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+            
+            // Randomly jump frequencies to sound "glitchy"
+            for(let i=0; i < 10; i++) {
+                const randomTime = audioCtx.currentTime + (Math.random() * TIME_DIST);
+                const randomFreq = 200 + (Math.random() * 800);
+                osc.frequency.linearRampToValueAtTime(randomFreq, randomTime);
+            }
 
-                if (SECONDS_PER_QUESTION > 0) {
-                    // MODE A: TIMED
-                    // Bonus: 10 points for every second LEFT
-                    pointsEarned += Math.ceil(questionTimeLeft * 10);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + TIME_DIST);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + TIME_DIST);
+        }
+
+        // --- TIMER (DELTA TIME FIX) ---
+        function runTimer(seconds, onComplete) {
+            clearInterval(timerInterval);
+            const endTime = Date.now() + (seconds * 1000);
+            
+            updateTimerDisplay(seconds); 
+
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const remaining = (endTime - now) / 1000;
+
+                if (remaining <= 0) {
+                    clearInterval(timerInterval);
+                    document.getElementById('timer-display').innerText = "0.0";
+                    onComplete();
                 } else {
-                    // MODE B: UNTIMED
-                    // Penalty: Deduct 10 points for every second TAKEN
-                    // (Minimum score of 500 to ensure getting it right is always worth it)
-                    const penalty = Math.floor(timeTakenSec * 10);
-                    pointsEarned = Math.max(1000 - penalty, 500);
+                    updateTimerDisplay(remaining);
+                }
+            }, 100);
+        }
+
+        function updateTimerDisplay(val) {
+            document.getElementById('timer-display').innerText = val.toFixed(1);
+        }
+
+        function setPhaseUI(text) {
+            document.getElementById('phase-label').innerText = text;
+        }
+
+        // --- INTERACTION ---
+        function renderSlots() {
+            const container = document.getElementById('slots-container');
+            container.innerHTML = '';
+
+            for(let i=0; i<COUNT; i++) {
+                let slot = document.createElement('div');
+                slot.className = 'slot';
+                if(i === selectedSlotIndex) slot.classList.add('active');
+                if(userAnswers[i]) {
+                    slot.classList.add('filled');
+                    slot.innerText = userAnswers[i].word;
+                } else {
+                    slot.innerText = "";
+                }
+                
+                let num = document.createElement('span');
+                num.className = 'slot-number';
+                num.innerText = i + 1;
+                slot.appendChild(num);
+                slot.onclick = () => { selectedSlotIndex = (selectedSlotIndex === i ? null : i); renderSlots(); };
+                container.appendChild(slot);
+            }
+        }
+
+        function renderBank() {
+            const container = document.getElementById('word-bank');
+            container.innerHTML = '';
+
+            bankWords.forEach(word => {
+                let btn = document.createElement('button');
+                btn.className = 'bank-btn';
+                btn.innerText = word;
+                
+                const isUsed = userAnswers.some(ans => ans && ans.word === word);
+                if(isUsed) btn.disabled = true;
+
+                btn.onclick = () => handleBankClick(word);
+                container.appendChild(btn);
+            });
+        }
+
+        function handleBankClick(word) {
+            if (selectedSlotIndex === null) return;
+
+            const timeOffset = (Date.now() - recallStartTime) / 1000;
+            userAnswers[selectedSlotIndex] = { word: word, time: timeOffset };
+
+            // Auto-advance
+            let nextEmpty = -1;
+            for(let i=0; i<COUNT; i++) {
+                if(!userAnswers[i]) { nextEmpty = i; break; }
+            }
+            selectedSlotIndex = nextEmpty;
+
+            renderSlots();
+            renderBank();
+        }
+
+        // --- SUBMIT & REPORT ---
+        function submitData() {
+            clearInterval(timerInterval);
+            document.getElementById('recall-ui').classList.add('hidden');
+            document.getElementById('game-over').classList.remove('hidden');
+
+            let totalScore = 0;
+            const tbody = document.getElementById('results-body');
+            tbody.innerHTML = '';
+
+            // Generate Report Row by Row
+            for(let i=0; i<COUNT; i++) {
+                const ans = userAnswers[i]; // { word, time } or null
+                const target = targetSequence[i]; // String
+                
+                const tr = document.createElement('tr');
+                
+                // 1. Slot ID
+                tr.innerHTML += `<td>${i+1}</td>`;
+
+                // 2. User Input
+                const userWord = ans ? ans.word : "[EMPTY]";
+                const userTime = ans ? ans.time.toFixed(2) : "--";
+                let statusHtml = "";
+                
+                if (ans && ans.word === target) {
+                    // CORRECT
+                    tr.innerHTML += `<td class="res-correct">${userWord}</td>`;
+                    statusHtml = "<span style='color:#0f0'>✓ PASS</span>";
+                    
+                    // Score Calculation
+                    let speedBonus = Math.max(0, Math.floor((TIME_ANS - ans.time) * 10));
+                    totalScore += (1000 + speedBonus);
+                } else {
+                    // WRONG
+                    tr.innerHTML += `<td class="res-wrong">${userWord}</td>`;
+                    statusHtml = "<span style='color:red'>✗ FAIL</span>";
                 }
 
-                showScoreAnim(pointsEarned);
-                currentScore += pointsEarned;
-                document.getElementById('current-score').innerText = currentScore;
-                document.getElementById('feedback-text').innerText = "Correct!";
-            } else {
-                // Wrong UI
-                if(selectedIndex !== -1) buttons[selectedIndex].classList.add('wrong');
-                buttons[qData.ans].classList.add('correct'); // Show right answer
+                // 3. Correct Answer (Show verification)
+                tr.innerHTML += `<td class="res-missed">${target}</td>`;
                 
-                document.getElementById('feedback-text').innerText = selectedIndex === -1 ? "Time's Up!" : "Wrong!";
-                showScoreAnim(0);
+                // 4. Time
+                tr.innerHTML += `<td>${userTime}</td>`;
+                
+                // 5. Status
+                tr.innerHTML += `<td>${statusHtml}</td>`;
+
+                tbody.appendChild(tr);
             }
 
-            // Next Question Delay
-            setTimeout(() => {
-                currentQIndex++;
-                loadQuestion();
-            }, 1500);
-        }
-
-        function showScoreAnim(amount) {
-            const animEl = document.getElementById('score-anim');
-            if (amount > 0) {
-                animEl.innerText = `+${amount}`;
-                animEl.className = "score-change score-up";
-            } else {
-                animEl.innerText = "+0";
-                animEl.className = "score-change score-none";
-            }
-            animEl.style.opacity = '1';
-            animEl.style.transform = 'translateY(-10px)';
+            document.getElementById('final-score').innerText = totalScore;
             
-            setTimeout(() => {
-                animEl.style.transform = 'translateY(0)';
-            }, 500);
+            window.parent.postMessage({ type: 'GAME_OVER', payload: { score: totalScore } }, '*');
         }
-
-        function endGame() {
-            // UI Switch
-            document.getElementById('game-ui').classList.add('hidden');
-            document.getElementById('game-over').classList.remove('hidden');
-            document.getElementById('game-over').style.display = 'block';
-
-            document.getElementById('final-correct').innerText = `${correctAnswers} / ${TOTAL_QUESTIONS}`;
-            document.getElementById('final-score').innerText = currentScore;
-
-            submitScoreToHub(currentScore);
-        }
-
-        function submitScoreToHub(finalScore) {
-            console.log("📤 Sending score to hub:", finalScore);
-            window.parent.postMessage({ 
-                type: 'GAME_OVER', 
-                payload: { score: finalScore } 
-            }, '*');
-        }
-
-        window.onload = initGame;
 
     </script>
 </body>

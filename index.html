@@ -3,304 +3,343 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slider Puzzle Challenge</title>
+    <title>Quiz Engine</title>
     <style>
         :root {
-            --tile-size: 100px;
-            --gap: 5px;
-            --bg-color: #2c3e50;
-            --tile-color: #34495e;
-            --accent: #e74c3c;
+            --primary: #6c5ce7;
+            --success: #00b894;
+            --error: #d63031;
+            --bg: #dfe6e9;
+            --card-bg: #ffffff;
+            --text: #2d3436;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
-            background-color: #ecf0f1;
+            background-color: var(--bg);
+            color: var(--text);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
             margin: 0;
-            user-select: none;
-        }
-
-        h2 { margin-top: 0; color: var(--bg-color); }
-
-        /* HUD */
-        #hud {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--bg-color);
-        }
-
-        /* Puzzle Container */
-        #puzzle-container {
-            width: 415px; /* 4 * 100 + 3 * 5 */
-            height: 415px;
-            position: relative;
-            background: var(--bg-color);
-            padding: 5px;
-            border-radius: 8px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        }
-
-        /* Individual Tiles */
-        .tile {
-            width: var(--tile-size);
-            height: var(--tile-size);
-            position: absolute;
-            background-image: url(images/image.png); /* background-image: url('https://picsum.photos/300/300'); for random images */
-            background-size: 400px 400px; /* Matches container size approx */
-            cursor: pointer;
-            transition: top 0.2s, left 0.2s;
-            border-radius: 4px;
+            padding: 20px;
             box-sizing: border-box;
-            border: 2px solid rgba(255,255,255,0.2);
-            color: rgba(255,255,255,0.5);
-            font-size: 12px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
 
-        .tile.empty {
-            background: transparent;
-            border: none;
+        #game-ui {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        /* Header (Timer & Progress) */
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #636e72;
+            font-size: 1.1rem;
+        }
+
+        .timer-bar {
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            margin-bottom: 25px;
+            overflow: hidden;
+            display: none; /* Hidden by default if timer=0 */
+        }
+        .timer-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 100%;
+            transition: width 1s linear;
+        }
+
+        /* Question Area */
+        h2 { margin-bottom: 25px; font-size: 1.5rem; line-height: 1.4; }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        button.option-btn {
+            background: #f1f2f6;
+            border: 2px solid transparent;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        button.option-btn:hover:not(:disabled) {
+            background: #e1e2e6;
+            transform: translateY(-2px);
+        }
+
+        /* Feedback States */
+        button.correct {
+            background-color: var(--success) !important;
+            color: white !important;
+            border-color: var(--success) !important;
+        }
+
+        button.wrong {
+            background-color: var(--error) !important;
+            color: white !important;
+            border-color: var(--error) !important;
+            opacity: 0.7;
+        }
+
+        /* Disabled state (after answering) */
+        button:disabled {
             cursor: default;
+            transform: none !important;
         }
 
-        /* Game Over Screen */
+        /* Game Over */
         #game-over {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(44, 62, 80, 0.95);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
+            text-align: center;
+            display: none;
         }
         
         .hidden { display: none !important; }
-        
-        .btn-start {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
-        }
+
     </style>
 </head>
 <body>
 
     <div id="game-ui">
-        <h2>🧩 PUZZLE RUSH</h2>
-        
-        <div id="hud">
-            <span>⏱️ <span id="timer">0</span>s</span>
-            <span>👣 Moves: <span id="moves">0</span></span>
+        <div class="hud">
+            <span>Question <span id="current-q">1</span>/<span id="total-q">10</span></span>
+            <span id="score-live">Score: 0</span>
         </div>
 
-        <div id="puzzle-container">
+        <div id="timer-bar-container" class="timer-bar">
+            <div id="timer-fill" class="timer-fill"></div>
+        </div>
+
+        <h2 id="question-text">Loading...</h2>
+
+        <div id="options-container" class="options-grid">
             </div>
+        
+        <p id="feedback-text" style="height: 20px; color: #888; font-size: 0.9rem; margin-top:15px;"></p>
     </div>
 
     <div id="game-over" class="hidden">
-        <h1>Puzzle Solved!</h1>
-        <p>Time: <span id="final-time">0</span>s</p>
-        <p>Moves: <span id="final-moves">0</span></p>
-        <h2 style="color:#f1c40f">Score: <span id="final-score">0</span></h2>
+        <h1>Quiz Complete!</h1>
+        <p>Correct Answers: <span id="final-correct">0</span></p>
+        <p>Total Time: <span id="final-time">0</span>s</p>
+        <h2 style="color: var(--primary); font-size: 3rem; margin: 20px 0;">
+            <span id="final-score">0</span>
+        </h2>
         <p>Sending to Hub...</p>
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        const ROWS = 4;
-        const COLS = 4;
-        const TILE_SIZE = 100; 
-        const GAP = 5; 
+        // --- 1. THE QUESTION BANK (JSON) ---
+        // You can populate this with hundreds of questions.
+        const QUESTION_BANK = [
+            { q: "What is the capital of France?", options: ["London", "Berlin", "Paris", "Madrid"], ans: 2 },
+            { q: "Which planet is known as the Red Planet?", options: ["Earth", "Mars", "Jupiter", "Venus"], ans: 1 },
+            { q: "What is 5 + 3?", options: ["5", "8", "10", "15"], ans: 1 },
+            { q: "Who wrote 'Romeo and Juliet'?", options: ["Shakespeare", "Hemingway", "Austen", "Dickens"], ans: 0 },
+            { q: "What is the largest ocean?", options: ["Atlantic", "Indian", "Arctic", "Pacific"], ans: 3 },
+            { q: "What is the chemical symbol for Gold?", options: ["Au", "Ag", "Fe", "Pb"], ans: 0 },
+            { q: "How many legs does a spider have?", options: ["6", "8", "10", "12"], ans: 1 },
+            { q: "Which is the fastest land animal?", options: ["Lion", "Cheetah", "Horse", "Leopard"], ans: 1 },
+            { q: "What is the boiling point of water?", options: ["90°C", "100°C", "110°C", "120°C"], ans: 1 },
+            { q: "Which element is needed for combustion?", options: ["Helium", "Oxygen", "Carbon", "Nitrogen"], ans: 1 },
+            { q: "What is the tallest mountain in the world?", options: ["K2", "Everest", "Kilimanjaro", "Fuji"], ans: 1 },
+            { q: "How many colors are in a rainbow?", options: ["5", "6", "7", "8"], ans: 2 },
+            { q: "Which language is used for web apps?", options: ["Python", "JavaScript", "C++", "Java"], ans: 1 },
+            { q: "What is the hardest natural substance?", options: ["Gold", "Iron", "Diamond", "Platinum"], ans: 2 },
+            { q: "Who painted the Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Monet"], ans: 1 },
+            { q: "What is the square root of 64?", options: ["6", "7", "8", "9"], ans: 2 },
+            { q: "Which country invented paper?", options: ["India", "Egypt", "China", "Greece"], ans: 2 },
+            { q: "What gas do plants absorb?", options: ["Oxygen", "CO2", "Nitrogen", "Hydrogen"], ans: 1 },
+            { q: "How many continents are there?", options: ["5", "6", "7", "8"], ans: 2 },
+            { q: "Which organ pumps blood?", options: ["Brain", "Lungs", "Heart", "Liver"], ans: 2 }
+        ];
 
-        // 1. Get the parameters from the URL
+        // --- 2. CONFIGURATION & URL PARAMS ---
         const urlParams = new URLSearchParams(window.location.search);
 
-        // 2. Set Seed: Check URL for 'seed', otherwise use default 12345
-        // We ensure it's a number using parseInt
-        const urlSeed = parseInt(urlParams.get('seed'));
-        const GAME_SEED = isNaN(urlSeed) ? 12345 : urlSeed;
+        // SEED: Default 12345
+        let currentSeed = parseInt(urlParams.get('seed')) || 12345;
 
-        // 3. Set Image: Check URL for 'img', otherwise use default Cat image
-        const urlImg = urlParams.get('img');
-        const defaultImg = 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80';
-        const IMAGE_URL = urlImg ? urlImg : defaultImg;
+        // COUNT: How many questions to show? (Default 5)
+        // We ensure we don't ask for more questions than exist in the bank.
+        const requestedCount = parseInt(urlParams.get('count')) || 5;
+        const TOTAL_QUESTIONS = Math.min(requestedCount, QUESTION_BANK.length);
 
-        // --- STATE ---
-        let tiles = []; 
-        let selectedTile = null;
-        let timeElapsed = 0;
-        let moveCount = 0;
-        let timerInterval;
-        let isGameActive = true;
+        // TIMER: Seconds per question (0 = No timer)
+        const SECONDS_PER_QUESTION = parseInt(urlParams.get('timer')) || 0; 
 
-        // Internal seed tracker
-        let currentSeed = GAME_SEED;
+        // --- 3. STATE ---
+        let questions = [];
+        let currentQIndex = 0;
+        let score = 0; // Internal tracker
+        let correctAnswers = 0;
+        let startTime = Date.now();
+        let questionTimerInterval;
+        let questionTimeLeft;
 
-        const container = document.getElementById('puzzle-container');
-
-        // --- FAIRNESS CHANGE 3: SEEDED RANDOM FUNCTION ---
-        // This function replaces Math.random(). 
-        // It generates the same sequence of numbers based on currentSeed.
+        // --- 4. SEEDED RANDOM LOGIC ---
         function seededRandom() {
             var x = Math.sin(currentSeed++) * 10000;
             return x - Math.floor(x);
         }
 
-        // --- INITIALIZATION ---
+        // Shuffle the WHOLE bank using the seed, then slice the first N items
+        function getSeededQuestions() {
+            // Clone the bank so we don't mess up original
+            let shuffled = [...QUESTION_BANK];
+            
+            // Fisher-Yates Shuffle using seededRandom
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(seededRandom() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            
+            return shuffled.slice(0, TOTAL_QUESTIONS);
+        }
+
+        // --- 5. GAME LOGIC ---
+
         function initGame() {
-            createTiles();
-            shuffleBoard();
-            startTimer();
+            questions = getSeededQuestions();
+            document.getElementById('total-q').innerText = TOTAL_QUESTIONS;
+            
+            if (SECONDS_PER_QUESTION > 0) {
+                document.getElementById('timer-bar-container').style.display = 'block';
+            }
+
+            startTime = Date.now(); // Start global timer
+            loadQuestion();
         }
 
-        function createTiles() {
-            container.innerHTML = '';
-            tiles = [];
+        function loadQuestion() {
+            if (currentQIndex >= questions.length) {
+                endGame();
+                return;
+            }
+
+            const qData = questions[currentQIndex];
             
-            for (let r = 0; r < ROWS; r++) {
-                tiles[r] = [];
-                for (let c = 0; c < COLS; c++) {
-                    let tile = document.createElement('div');
-                    tile.className = 'tile';
-                    setPosition(tile, r, c);
+            // Update UI
+            document.getElementById('current-q').innerText = currentQIndex + 1;
+            document.getElementById('question-text').innerText = qData.q;
+            document.getElementById('feedback-text').innerText = "";
+            
+            const optionsDiv = document.getElementById('options-container');
+            optionsDiv.innerHTML = '';
 
-                    // Use the static IMAGE_URL variable
-                    tile.style.backgroundImage = `url('${IMAGE_URL}')`; 
-                    tile.style.backgroundPosition = `-${c * TILE_SIZE}px -${r * TILE_SIZE}px`;
-                    
-                    tile.dataset.correctR = r;
-                    tile.dataset.correctC = c;
-                    
-                    tile.dataset.row = r;
-                    tile.dataset.col = c;
-                    tile.onclick = handleTileClick;
+            // Create Buttons
+            qData.options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => handleAnswer(index);
+                optionsDiv.appendChild(btn);
+            });
 
-                    container.appendChild(tile);
-                    tiles[r][c] = tile;
-                }
+            // Handle Timer
+            if (SECONDS_PER_QUESTION > 0) {
+                startQuestionTimer();
             }
         }
 
-        function setPosition(element, r, c) {
-            element.style.top = (r * (TILE_SIZE + GAP)) + 'px';
-            element.style.left = (c * (TILE_SIZE + GAP)) + 'px';
-        }
+        function startQuestionTimer() {
+            clearInterval(questionTimerInterval);
+            questionTimeLeft = SECONDS_PER_QUESTION;
+            updateTimerBar();
 
-        function shuffleBoard() {
-            isGameActive = false; 
-            
-            // Reset the seed so the shuffle is the same every time the page loads
-            currentSeed = GAME_SEED;
-
-            for (let i = 0; i < 200; i++) {
-                // Pick two random tiles to swap
-                const r1 = Math.floor(seededRandom() * ROWS);
-                const c1 = Math.floor(seededRandom() * COLS);
-                const r2 = Math.floor(seededRandom() * ROWS);
-                const c2 = Math.floor(seededRandom() * COLS);
+            questionTimerInterval = setInterval(() => {
+                questionTimeLeft--;
+                updateTimerBar();
                 
-                if (r1 !== r2 || c1 !== c2) {
-                    swapTiles(r1, c1, r2, c2);
+                if (questionTimeLeft <= 0) {
+                    clearInterval(questionTimerInterval);
+                    handleAnswer(-1); // -1 indicates Timeout/Wrong
                 }
-            }
-            
-            moveCount = 0; 
-            document.getElementById('moves').innerText = 0;
-            isGameActive = true;
-        }
-
-        function handleTileClick(e) {
-            if (!isGameActive) return;
-            const tile = e.currentTarget;
-            const r = parseInt(tile.dataset.row);
-            const c = parseInt(tile.dataset.col);
-            if (selectedTile === null) {
-                selectedTile = { r, c };
-                tile.style.border = '2px solid #e74c3c';
-            } else if (selectedTile.r === r && selectedTile.c === c) {
-                tiles[selectedTile.r][selectedTile.c].style.border = '2px solid rgba(255,255,255,0.2)';
-                selectedTile = null;
-            } else {
-                swapTiles(selectedTile.r, selectedTile.c, r, c);
-                moveCount++;
-                document.getElementById('moves').innerText = moveCount;
-                tiles[selectedTile.r][selectedTile.c].style.border = '2px solid rgba(255,255,255,0.2)';
-                selectedTile = null;
-                checkWin();
-            }
-        }
-
-        function swapTiles(r1, c1, r2, c2) {
-            const tile1 = tiles[r1][c1];
-            const tile2 = tiles[r2][c2];
-            
-            // Swap positions
-            setPosition(tile1, r2, c2);
-            setPosition(tile2, r1, c1);
-            // Update dataset
-            tile1.dataset.row = r2;
-            tile1.dataset.col = c2;
-            tile2.dataset.row = r1;
-            tile2.dataset.col = c1;
-            // Swap in array
-            tiles[r1][c1] = tile2;
-            tiles[r2][c2] = tile1;
-        }
-
-        function checkWin() {
-            if (!isGameActive) return;
-            let solved = true;
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    const tile = tiles[r][c];
-                    if (tile) {
-                        const correctR = parseInt(tile.dataset.correctR);
-                        const correctC = parseInt(tile.dataset.correctC);
-                        if (r !== correctR || c !== correctC) solved = false;
-                    }
-                }
-            }
-            if (solved) gameWin();
-        }
-
-        function startTimer() {
-            timerInterval = setInterval(() => {
-                timeElapsed++;
-                document.getElementById('timer').innerText = timeElapsed;
             }, 1000);
         }
 
-        function gameWin() {
-            isGameActive = false;
-            clearInterval(timerInterval);
-            let score = 20000 - (timeElapsed * 5) - (moveCount * 2);
-            if (score < 0) score = 0;
+        function updateTimerBar() {
+            const percentage = (questionTimeLeft / SECONDS_PER_QUESTION) * 100;
+            document.getElementById('timer-fill').style.width = percentage + "%";
+        }
 
+        function handleAnswer(selectedIndex) {
+            // Stop timer if running
+            clearInterval(questionTimerInterval);
+
+            const qData = questions[currentQIndex];
+            const buttons = document.querySelectorAll('.option-btn');
+            const isCorrect = selectedIndex === qData.ans;
+
+            // 1. Disable all buttons
+            buttons.forEach(btn => btn.disabled = true);
+
+            // 2. Highlight Logic
+            if (selectedIndex !== -1) {
+                // If user actually clicked something
+                if (isCorrect) {
+                    buttons[selectedIndex].classList.add('correct');
+                    correctAnswers++;
+                } else {
+                    buttons[selectedIndex].classList.add('wrong');
+                    // Highlight the correct one
+                    buttons[qData.ans].classList.add('correct');
+                }
+            } else {
+                // Timeout case: just show correct one
+                buttons[qData.ans].classList.add('correct');
+                document.getElementById('feedback-text').innerText = "Time's Up!";
+            }
+
+            // 3. Wait 1.5s then Next Question
+            setTimeout(() => {
+                currentQIndex++;
+                loadQuestion();
+            }, 1500);
+        }
+
+        function endGame() {
+            const totalTimeTaken = Math.floor((Date.now() - startTime) / 1000);
+            
+            // --- SCORING ALGORITHM ---
+            // 1000 points per correct answer.
+            // Deduct 5 points per second taken (Speed Bonus).
+            // Prevent negative scores.
+            let finalScore = (correctAnswers * 1000) - (totalTimeTaken * 5);
+            if (finalScore < 0) finalScore = 0;
+
+            // UI Switch
             document.getElementById('game-ui').classList.add('hidden');
-            document.getElementById('game-over').classList.remove('hidden');
-            document.getElementById('final-time').innerText = timeElapsed;
-            document.getElementById('final-moves').innerText = moveCount;
-            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over').classList.remove('hidden'); // Show Game Over
+            document.getElementById('game-over').style.display = 'block'; // Ensure display
 
-            submitScoreToHub(score);
+            document.getElementById('final-correct').innerText = `${correctAnswers} / ${TOTAL_QUESTIONS}`;
+            document.getElementById('final-time').innerText = totalTimeTaken;
+            document.getElementById('final-score').innerText = finalScore;
+
+            // Send to Hub
+            submitScoreToHub(finalScore);
         }
 
         function submitScoreToHub(finalScore) {
@@ -311,7 +350,9 @@
             }, '*');
         }
 
+        // Start
         window.onload = initGame;
+
     </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quiz Engine</title>
+    <title>Live Scoring Quiz</title>
     <style>
         :root {
             --primary: #6c5ce7;
@@ -38,7 +38,6 @@
             text-align: center;
         }
 
-        /* Header (Timer & Progress) */
         .hud {
             display: flex;
             justify-content: space-between;
@@ -48,13 +47,23 @@
             font-size: 1.1rem;
         }
 
+        /* Animated Score Update */
+        .score-change {
+            font-size: 0.9rem;
+            margin-left: 5px;
+            opacity: 0;
+            transition: opacity 0.5s, transform 0.5s;
+        }
+        .score-up { color: var(--success); }
+        .score-none { color: var(--error); }
+
         .timer-bar {
             height: 6px;
             background: #eee;
             border-radius: 3px;
             margin-bottom: 25px;
             overflow: hidden;
-            display: none; /* Hidden by default if timer=0 */
+            display: none; 
         }
         .timer-fill {
             height: 100%;
@@ -63,7 +72,6 @@
             transition: width 1s linear;
         }
 
-        /* Question Area */
         h2 { margin-bottom: 25px; font-size: 1.5rem; line-height: 1.4; }
 
         .options-grid {
@@ -89,7 +97,6 @@
             transform: translateY(-2px);
         }
 
-        /* Feedback States */
         button.correct {
             background-color: var(--success) !important;
             color: white !important;
@@ -103,20 +110,13 @@
             opacity: 0.7;
         }
 
-        /* Disabled state (after answering) */
         button:disabled {
             cursor: default;
             transform: none !important;
         }
 
-        /* Game Over */
-        #game-over {
-            text-align: center;
-            display: none;
-        }
-        
+        #game-over { text-align: center; display: none; }
         .hidden { display: none !important; }
-
     </style>
 </head>
 <body>
@@ -124,7 +124,10 @@
     <div id="game-ui">
         <div class="hud">
             <span>Question <span id="current-q">1</span>/<span id="total-q">10</span></span>
-            <span id="score-live">Score: 0</span>
+            <span>
+                Score: <span id="current-score">0</span>
+                <span id="score-anim" class="score-change">+0</span>
+            </span>
         </div>
 
         <div id="timer-bar-container" class="timer-bar">
@@ -133,8 +136,7 @@
 
         <h2 id="question-text">Loading...</h2>
 
-        <div id="options-container" class="options-grid">
-            </div>
+        <div id="options-container" class="options-grid"></div>
         
         <p id="feedback-text" style="height: 20px; color: #888; font-size: 0.9rem; margin-top:15px;"></p>
     </div>
@@ -142,7 +144,6 @@
     <div id="game-over" class="hidden">
         <h1>Quiz Complete!</h1>
         <p>Correct Answers: <span id="final-correct">0</span></p>
-        <p>Total Time: <span id="final-time">0</span>s</p>
         <h2 style="color: var(--primary); font-size: 3rem; margin: 20px 0;">
             <span id="final-score">0</span>
         </h2>
@@ -150,85 +151,67 @@
     </div>
 
     <script>
-        // --- 1. THE QUESTION BANK (JSON) ---
-        // You can populate this with hundreds of questions.
+        // --- 1. DATA & CONFIG ---
         const QUESTION_BANK = [
             { q: "What is the capital of France?", options: ["London", "Berlin", "Paris", "Madrid"], ans: 2 },
-            { q: "Which planet is known as the Red Planet?", options: ["Earth", "Mars", "Jupiter", "Venus"], ans: 1 },
+            { q: "Which planet is the Red Planet?", options: ["Earth", "Mars", "Jupiter", "Venus"], ans: 1 },
             { q: "What is 5 + 3?", options: ["5", "8", "10", "15"], ans: 1 },
             { q: "Who wrote 'Romeo and Juliet'?", options: ["Shakespeare", "Hemingway", "Austen", "Dickens"], ans: 0 },
             { q: "What is the largest ocean?", options: ["Atlantic", "Indian", "Arctic", "Pacific"], ans: 3 },
-            { q: "What is the chemical symbol for Gold?", options: ["Au", "Ag", "Fe", "Pb"], ans: 0 },
-            { q: "How many legs does a spider have?", options: ["6", "8", "10", "12"], ans: 1 },
-            { q: "Which is the fastest land animal?", options: ["Lion", "Cheetah", "Horse", "Leopard"], ans: 1 },
-            { q: "What is the boiling point of water?", options: ["90°C", "100°C", "110°C", "120°C"], ans: 1 },
-            { q: "Which element is needed for combustion?", options: ["Helium", "Oxygen", "Carbon", "Nitrogen"], ans: 1 },
-            { q: "What is the tallest mountain in the world?", options: ["K2", "Everest", "Kilimanjaro", "Fuji"], ans: 1 },
-            { q: "How many colors are in a rainbow?", options: ["5", "6", "7", "8"], ans: 2 },
-            { q: "Which language is used for web apps?", options: ["Python", "JavaScript", "C++", "Java"], ans: 1 },
-            { q: "What is the hardest natural substance?", options: ["Gold", "Iron", "Diamond", "Platinum"], ans: 2 },
-            { q: "Who painted the Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Monet"], ans: 1 },
-            { q: "What is the square root of 64?", options: ["6", "7", "8", "9"], ans: 2 },
-            { q: "Which country invented paper?", options: ["India", "Egypt", "China", "Greece"], ans: 2 },
-            { q: "What gas do plants absorb?", options: ["Oxygen", "CO2", "Nitrogen", "Hydrogen"], ans: 1 },
-            { q: "How many continents are there?", options: ["5", "6", "7", "8"], ans: 2 },
-            { q: "Which organ pumps blood?", options: ["Brain", "Lungs", "Heart", "Liver"], ans: 2 }
+            { q: "Symbol for Gold?", options: ["Au", "Ag", "Fe", "Pb"], ans: 0 },
+            { q: "Legs on a spider?", options: ["6", "8", "10", "12"], ans: 1 },
+            { q: "Fastest land animal?", options: ["Lion", "Cheetah", "Horse", "Leopard"], ans: 1 },
+            { q: "Boiling point of water?", options: ["90°C", "100°C", "110°C", "120°C"], ans: 1 },
+            { q: "Element needed for combustion?", options: ["Helium", "Oxygen", "Carbon", "Nitrogen"], ans: 1 },
+            { q: "Tallest mountain?", options: ["K2", "Everest", "Kilimanjaro", "Fuji"], ans: 1 },
+            { q: "Colors in a rainbow?", options: ["5", "6", "7", "8"], ans: 2 },
+            { q: "Language for web apps?", options: ["Python", "JavaScript", "C++", "Java"], ans: 1 },
+            { q: "Hardest natural substance?", options: ["Gold", "Iron", "Diamond", "Platinum"], ans: 2 },
+            { q: "Painted Mona Lisa?", options: ["Van Gogh", "Da Vinci", "Picasso", "Monet"], ans: 1 },
+            { q: "Square root of 64?", options: ["6", "7", "8", "9"], ans: 2 },
+            { q: "Invented paper?", options: ["India", "Egypt", "China", "Greece"], ans: 2 },
+            { q: "Plants absorb?", options: ["Oxygen", "CO2", "Nitrogen", "Hydrogen"], ans: 1 },
+            { q: "Number of continents?", options: ["5", "6", "7", "8"], ans: 2 },
+            { q: "Organ pumps blood?", options: ["Brain", "Lungs", "Heart", "Liver"], ans: 2 }
         ];
 
-        // --- 2. CONFIGURATION & URL PARAMS ---
         const urlParams = new URLSearchParams(window.location.search);
-
-        // SEED: Default 12345
         let currentSeed = parseInt(urlParams.get('seed')) || 12345;
-
-        // COUNT: How many questions to show? (Default 5)
-        // We ensure we don't ask for more questions than exist in the bank.
         const requestedCount = parseInt(urlParams.get('count')) || 5;
         const TOTAL_QUESTIONS = Math.min(requestedCount, QUESTION_BANK.length);
-
-        // TIMER: Seconds per question (0 = No timer)
         const SECONDS_PER_QUESTION = parseInt(urlParams.get('timer')) || 0; 
 
-        // --- 3. STATE ---
+        // --- 2. STATE ---
         let questions = [];
         let currentQIndex = 0;
-        let score = 0; // Internal tracker
+        let currentScore = 0; // Live Score
         let correctAnswers = 0;
-        let startTime = Date.now();
         let questionTimerInterval;
         let questionTimeLeft;
+        let questionStartTime; // To track time per question
 
-        // --- 4. SEEDED RANDOM LOGIC ---
+        // --- 3. HELPERS ---
         function seededRandom() {
             var x = Math.sin(currentSeed++) * 10000;
             return x - Math.floor(x);
         }
 
-        // Shuffle the WHOLE bank using the seed, then slice the first N items
         function getSeededQuestions() {
-            // Clone the bank so we don't mess up original
             let shuffled = [...QUESTION_BANK];
-            
-            // Fisher-Yates Shuffle using seededRandom
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(seededRandom() * (i + 1));
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
-            
             return shuffled.slice(0, TOTAL_QUESTIONS);
         }
 
-        // --- 5. GAME LOGIC ---
-
+        // --- 4. GAME LOOP ---
         function initGame() {
             questions = getSeededQuestions();
             document.getElementById('total-q').innerText = TOTAL_QUESTIONS;
-            
             if (SECONDS_PER_QUESTION > 0) {
                 document.getElementById('timer-bar-container').style.display = 'block';
             }
-
-            startTime = Date.now(); // Start global timer
             loadQuestion();
         }
 
@@ -240,15 +223,15 @@
 
             const qData = questions[currentQIndex];
             
-            // Update UI
+            // UI Reset
             document.getElementById('current-q').innerText = currentQIndex + 1;
             document.getElementById('question-text').innerText = qData.q;
             document.getElementById('feedback-text').innerText = "";
-            
+            document.getElementById('score-anim').style.opacity = '0'; // Hide previous anim
+
             const optionsDiv = document.getElementById('options-container');
             optionsDiv.innerHTML = '';
 
-            // Create Buttons
             qData.options.forEach((opt, index) => {
                 const btn = document.createElement('button');
                 btn.className = 'option-btn';
@@ -257,7 +240,8 @@
                 optionsDiv.appendChild(btn);
             });
 
-            // Handle Timer
+            // Start Timer for this specific question
+            questionStartTime = Date.now();
             if (SECONDS_PER_QUESTION > 0) {
                 startQuestionTimer();
             }
@@ -271,10 +255,9 @@
             questionTimerInterval = setInterval(() => {
                 questionTimeLeft--;
                 updateTimerBar();
-                
                 if (questionTimeLeft <= 0) {
                     clearInterval(questionTimerInterval);
-                    handleAnswer(-1); // -1 indicates Timeout/Wrong
+                    handleAnswer(-1); // Timeout
                 }
             }, 1000);
         }
@@ -284,62 +267,88 @@
             document.getElementById('timer-fill').style.width = percentage + "%";
         }
 
+        // --- 5. SCORING & ANSWER HANDLING ---
         function handleAnswer(selectedIndex) {
-            // Stop timer if running
             clearInterval(questionTimerInterval);
-
+            
             const qData = questions[currentQIndex];
             const buttons = document.querySelectorAll('.option-btn');
             const isCorrect = selectedIndex === qData.ans;
+            const timeTakenSec = (Date.now() - questionStartTime) / 1000;
 
-            // 1. Disable all buttons
+            // Disable buttons
             buttons.forEach(btn => btn.disabled = true);
 
-            // 2. Highlight Logic
-            if (selectedIndex !== -1) {
-                // If user actually clicked something
-                if (isCorrect) {
-                    buttons[selectedIndex].classList.add('correct');
-                    correctAnswers++;
+            let pointsEarned = 0;
+
+            if (isCorrect) {
+                // Correct UI
+                if(selectedIndex !== -1) buttons[selectedIndex].classList.add('correct');
+                correctAnswers++;
+                
+                // === SCORING LOGIC ===
+                // Base points for getting it right
+                pointsEarned = 1000; 
+
+                if (SECONDS_PER_QUESTION > 0) {
+                    // MODE A: TIMED
+                    // Bonus: 10 points for every second LEFT
+                    pointsEarned += Math.ceil(questionTimeLeft * 10);
                 } else {
-                    buttons[selectedIndex].classList.add('wrong');
-                    // Highlight the correct one
-                    buttons[qData.ans].classList.add('correct');
+                    // MODE B: UNTIMED
+                    // Penalty: Deduct 10 points for every second TAKEN
+                    // (Minimum score of 500 to ensure getting it right is always worth it)
+                    const penalty = Math.floor(timeTakenSec * 10);
+                    pointsEarned = Math.max(1000 - penalty, 500);
                 }
+
+                showScoreAnim(pointsEarned);
+                currentScore += pointsEarned;
+                document.getElementById('current-score').innerText = currentScore;
+                document.getElementById('feedback-text').innerText = "Correct!";
             } else {
-                // Timeout case: just show correct one
-                buttons[qData.ans].classList.add('correct');
-                document.getElementById('feedback-text').innerText = "Time's Up!";
+                // Wrong UI
+                if(selectedIndex !== -1) buttons[selectedIndex].classList.add('wrong');
+                buttons[qData.ans].classList.add('correct'); // Show right answer
+                
+                document.getElementById('feedback-text').innerText = selectedIndex === -1 ? "Time's Up!" : "Wrong!";
+                showScoreAnim(0);
             }
 
-            // 3. Wait 1.5s then Next Question
+            // Next Question Delay
             setTimeout(() => {
                 currentQIndex++;
                 loadQuestion();
             }, 1500);
         }
 
-        function endGame() {
-            const totalTimeTaken = Math.floor((Date.now() - startTime) / 1000);
+        function showScoreAnim(amount) {
+            const animEl = document.getElementById('score-anim');
+            if (amount > 0) {
+                animEl.innerText = `+${amount}`;
+                animEl.className = "score-change score-up";
+            } else {
+                animEl.innerText = "+0";
+                animEl.className = "score-change score-none";
+            }
+            animEl.style.opacity = '1';
+            animEl.style.transform = 'translateY(-10px)';
             
-            // --- SCORING ALGORITHM ---
-            // 1000 points per correct answer.
-            // Deduct 5 points per second taken (Speed Bonus).
-            // Prevent negative scores.
-            let finalScore = (correctAnswers * 1000) - (totalTimeTaken * 5);
-            if (finalScore < 0) finalScore = 0;
+            setTimeout(() => {
+                animEl.style.transform = 'translateY(0)';
+            }, 500);
+        }
 
+        function endGame() {
             // UI Switch
             document.getElementById('game-ui').classList.add('hidden');
-            document.getElementById('game-over').classList.remove('hidden'); // Show Game Over
-            document.getElementById('game-over').style.display = 'block'; // Ensure display
+            document.getElementById('game-over').classList.remove('hidden');
+            document.getElementById('game-over').style.display = 'block';
 
             document.getElementById('final-correct').innerText = `${correctAnswers} / ${TOTAL_QUESTIONS}`;
-            document.getElementById('final-time').innerText = totalTimeTaken;
-            document.getElementById('final-score').innerText = finalScore;
+            document.getElementById('final-score').innerText = currentScore;
 
-            // Send to Hub
-            submitScoreToHub(finalScore);
+            submitScoreToHub(currentScore);
         }
 
         function submitScoreToHub(finalScore) {
@@ -350,7 +359,6 @@
             }, '*');
         }
 
-        // Start
         window.onload = initGame;
 
     </script>

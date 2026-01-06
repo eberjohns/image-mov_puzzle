@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MINDSCAPE</title>
+    <title>Memory RAM: Verification Mode</title>
     <style>
         :root {
             --neon-green: #0f0;
@@ -39,7 +39,6 @@
 
         .container { width: 95%; max-width: 900px; margin-top: 80px; display: flex; flex-direction: column; align-items: center; }
 
-        /* --- PHASES --- */
         .hidden { display: none !important; }
 
         /* Memorize Items */
@@ -87,7 +86,7 @@
         }
 
         /* --- RESULTS TABLE --- */
-        #game-over { width: 100%; max-width: 800px; }
+        #game-over { width: 100%; max-width: 800px; padding-bottom: 50px; }
         .results-table {
             width: 100%; border-collapse: collapse; margin-top: 20px;
             font-size: 0.9rem; text-align: left;
@@ -98,26 +97,36 @@
         .res-correct { color: var(--neon-green) !important; }
         .res-wrong { color: var(--neon-red) !important; text-decoration: line-through; }
         .res-missed { color: var(--neon-blue) !important; font-weight: bold; }
+
+        /* EXIT BUTTON */
+        #btn-exit {
+            margin-top: 30px;
+            padding: 15px 30px;
+            font-size: 1rem;
+            background: white;
+            color: black;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 0 15px white;
+            animation: pulse 2s infinite;
+        }
         
-        /* Start Overlay */
         #start-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 200;
             display: flex; justify-content: center; align-items: center; flex-direction: column;
         }
 
-        @keyframes glitch {
-            0% { transform: translate(0); } 20% { transform: translate(-2px, 2px); }
-            40% { transform: translate(-2px, -2px); } 60% { transform: translate(2px, 2px); }
-            80% { transform: translate(2px, -2px); } 100% { transform: translate(0); }
-        }
+        @keyframes glitch { 0% { transform: translate(0); } 20% { transform: translate(-2px, 2px); } 40% { transform: translate(-2px, -2px); } 60% { transform: translate(2px, 2px); } 80% { transform: translate(2px, -2px); } 100% { transform: translate(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
 
     <div id="start-overlay">
-        <h1 style="color:white; margin-bottom:10px;">MINDSCAPE</h1>
+        <h1 style="color:white; margin-bottom:10px;">🧠 MEMORY RAM</h1>
         <p style="color:#777; margin-bottom: 30px;">Turn volume UP. Click to Initialize.</p>
         <button onclick="startGame()" style="padding:15px 30px; font-size:1.5rem; cursor:pointer; background:var(--neon-green); border:none; font-weight:bold;">INITIALIZE SYSTEM</button>
     </div>
@@ -157,7 +166,8 @@
                 <tbody id="results-body">
                     </tbody>
             </table>
-            <p style="color:#555; margin-top:20px;">Data transmitted to Hub.</p>
+            
+            <button id="btn-exit" onclick="sendToHubNow()">UPLOAD SCORE & EXIT (60s)</button>
         </div>
     </div>
 
@@ -173,8 +183,6 @@
         const urlParams = new URLSearchParams(window.location.search);
         const SEED = parseInt(urlParams.get('seed')) || 12345;
         const COUNT = parseInt(urlParams.get('count')) || 5; 
-        
-        // Timers
         const TIME_MEM = Math.max(1, parseInt(urlParams.get('memTime')) || 5);
         const TIME_DIST = Math.max(1, parseInt(urlParams.get('distTime')) || 4);
         const TIME_ANS = Math.max(5, parseInt(urlParams.get('ansTime')) || 45);
@@ -187,12 +195,13 @@
         let selectedSlotIndex = null;
         let recallStartTime = 0;
         let timerInterval;
+        let exitTimerInterval;
+        let calculatedFinalScore = 0;
+        let isScoreSent = false;
         
-        // Audio
         let audioCtx;
         let isAudioInit = false;
 
-        // --- RANDOM ---
         function seededRandom() {
             var x = Math.sin(currentSeed++) * 10000;
             return x - Math.floor(x);
@@ -206,25 +215,16 @@
             return array;
         }
 
-        // --- START ---
         function startGame() {
-            // 1. Initialize Audio Context on User Click (Crucial for sound to work)
             if (!isAudioInit) {
                 try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    // Resume immediately in case it started suspended
-                    if (audioCtx.state === 'suspended') {
-                        audioCtx.resume();
-                    }
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
                     isAudioInit = true;
-                } catch (e) {
-                    console.warn("Audio not supported");
-                }
+                } catch (e) { console.warn("Audio not supported"); }
             }
 
             document.getElementById('start-overlay').classList.add('hidden');
-            
-            // Generate Game Data
             let pool = shuffleSeeded([...DATA_POOL]);
             targetSequence = pool.slice(0, COUNT);
             let decoys = pool.slice(COUNT, COUNT * 2);
@@ -234,20 +234,17 @@
             startPhaseMemorize();
         }
 
-        // --- PHASES ---
         function startPhaseMemorize() {
             setPhaseUI("MEMORIZE");
             const container = document.getElementById('sequence-display');
             container.classList.remove('hidden');
             container.innerHTML = '';
-            
             targetSequence.forEach(word => {
                 let div = document.createElement('div');
                 div.className = 'mem-item';
                 div.innerText = word;
                 container.appendChild(div);
             });
-
             runTimer(TIME_MEM, () => {
                 container.classList.add('hidden');
                 startPhaseDistract();
@@ -257,10 +254,7 @@
         function startPhaseDistract() {
             setPhaseUI("ERROR // CORRUPTION");
             document.getElementById('distract-layer').classList.remove('hidden');
-            
-            // PLAY SOUND
             playGlitchSound();
-
             runTimer(TIME_DIST, () => {
                 document.getElementById('distract-layer').classList.add('hidden');
                 startPhaseRecall();
@@ -270,53 +264,38 @@
         function startPhaseRecall() {
             setPhaseUI("RESTORE DATA");
             document.getElementById('recall-ui').classList.remove('hidden');
-            
             renderSlots();
             renderBank();
-            
             recallStartTime = Date.now();
             runTimer(TIME_ANS, submitData);
         }
 
-        // --- AUDIO ENGINE ---
         function playGlitchSound() {
             if(!audioCtx) return;
-            
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            
             osc.type = 'sawtooth';
-            // Start low frequency
             osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-            
-            // Randomly jump frequencies to sound "glitchy"
             for(let i=0; i < 10; i++) {
                 const randomTime = audioCtx.currentTime + (Math.random() * TIME_DIST);
                 const randomFreq = 200 + (Math.random() * 800);
                 osc.frequency.linearRampToValueAtTime(randomFreq, randomTime);
             }
-
             gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + TIME_DIST);
-            
             osc.connect(gain);
             gain.connect(audioCtx.destination);
-            
             osc.start();
             osc.stop(audioCtx.currentTime + TIME_DIST);
         }
 
-        // --- TIMER (DELTA TIME FIX) ---
         function runTimer(seconds, onComplete) {
             clearInterval(timerInterval);
             const endTime = Date.now() + (seconds * 1000);
-            
             updateTimerDisplay(seconds); 
-
             timerInterval = setInterval(() => {
                 const now = Date.now();
                 const remaining = (endTime - now) / 1000;
-
                 if (remaining <= 0) {
                     clearInterval(timerInterval);
                     document.getElementById('timer-display').innerText = "0.0";
@@ -335,11 +314,9 @@
             document.getElementById('phase-label').innerText = text;
         }
 
-        // --- INTERACTION ---
         function renderSlots() {
             const container = document.getElementById('slots-container');
             container.innerHTML = '';
-
             for(let i=0; i<COUNT; i++) {
                 let slot = document.createElement('div');
                 slot.className = 'slot';
@@ -350,7 +327,6 @@
                 } else {
                     slot.innerText = "";
                 }
-                
                 let num = document.createElement('span');
                 num.className = 'slot-number';
                 num.innerText = i + 1;
@@ -363,15 +339,12 @@
         function renderBank() {
             const container = document.getElementById('word-bank');
             container.innerHTML = '';
-
             bankWords.forEach(word => {
                 let btn = document.createElement('button');
                 btn.className = 'bank-btn';
                 btn.innerText = word;
-                
                 const isUsed = userAnswers.some(ans => ans && ans.word === word);
                 if(isUsed) btn.disabled = true;
-
                 btn.onclick = () => handleBankClick(word);
                 container.appendChild(btn);
             });
@@ -379,75 +352,82 @@
 
         function handleBankClick(word) {
             if (selectedSlotIndex === null) return;
-
             const timeOffset = (Date.now() - recallStartTime) / 1000;
             userAnswers[selectedSlotIndex] = { word: word, time: timeOffset };
-
-            // Auto-advance
             let nextEmpty = -1;
             for(let i=0; i<COUNT; i++) {
                 if(!userAnswers[i]) { nextEmpty = i; break; }
             }
             selectedSlotIndex = nextEmpty;
-
             renderSlots();
             renderBank();
         }
 
-        // --- SUBMIT & REPORT ---
         function submitData() {
             clearInterval(timerInterval);
             document.getElementById('recall-ui').classList.add('hidden');
             document.getElementById('game-over').classList.remove('hidden');
 
-            let totalScore = 0;
+            calculatedFinalScore = 0;
             const tbody = document.getElementById('results-body');
             tbody.innerHTML = '';
 
-            // Generate Report Row by Row
             for(let i=0; i<COUNT; i++) {
-                const ans = userAnswers[i]; // { word, time } or null
-                const target = targetSequence[i]; // String
-                
+                const ans = userAnswers[i]; 
+                const target = targetSequence[i]; 
                 const tr = document.createElement('tr');
-                
-                // 1. Slot ID
                 tr.innerHTML += `<td>${i+1}</td>`;
-
-                // 2. User Input
                 const userWord = ans ? ans.word : "[EMPTY]";
                 const userTime = ans ? ans.time.toFixed(2) : "--";
                 let statusHtml = "";
                 
                 if (ans && ans.word === target) {
-                    // CORRECT
                     tr.innerHTML += `<td class="res-correct">${userWord}</td>`;
                     statusHtml = "<span style='color:#0f0'>✓ PASS</span>";
-                    
-                    // Score Calculation
                     let speedBonus = Math.max(0, Math.floor((TIME_ANS - ans.time) * 10));
-                    totalScore += (1000 + speedBonus);
+                    calculatedFinalScore += (1000 + speedBonus);
                 } else {
-                    // WRONG
                     tr.innerHTML += `<td class="res-wrong">${userWord}</td>`;
                     statusHtml = "<span style='color:red'>✗ FAIL</span>";
                 }
-
-                // 3. Correct Answer (Show verification)
                 tr.innerHTML += `<td class="res-missed">${target}</td>`;
-                
-                // 4. Time
                 tr.innerHTML += `<td>${userTime}</td>`;
-                
-                // 5. Status
                 tr.innerHTML += `<td>${statusHtml}</td>`;
-
                 tbody.appendChild(tr);
             }
 
-            document.getElementById('final-score').innerText = totalScore;
+            document.getElementById('final-score').innerText = calculatedFinalScore;
             
-            window.parent.postMessage({ type: 'GAME_OVER', payload: { score: totalScore } }, '*');
+            // --- NEW: Start Exit Timer instead of sending immediately ---
+            startExitTimer();
+        }
+
+        function startExitTimer() {
+            let secondsLeft = 60;
+            const btn = document.getElementById('btn-exit');
+            
+            btn.innerText = `UPLOAD SCORE & EXIT (${secondsLeft}s)`;
+            
+            exitTimerInterval = setInterval(() => {
+                secondsLeft--;
+                btn.innerText = `UPLOAD SCORE & EXIT (${secondsLeft}s)`;
+                
+                if (secondsLeft <= 0) {
+                    sendToHubNow();
+                }
+            }, 1000);
+        }
+
+        function sendToHubNow() {
+            if (isScoreSent) return;
+            isScoreSent = true;
+            clearInterval(exitTimerInterval);
+            
+            document.getElementById('btn-exit').innerText = "DATA UPLOADED.";
+            document.getElementById('btn-exit').disabled = true;
+
+            console.log("📤 Sending score:", calculatedFinalScore);
+            window.parent.postMessage({ type: 'GAME_OVER', payload: { score: calculatedFinalScore } }, '*');
         }
 
     </script>
